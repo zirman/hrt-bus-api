@@ -238,6 +238,12 @@ $(function(){
 		}
 	});
 	
+	var Bus = Backbone.Model.extend({
+		position: function() {
+			return new google.maps.LatLng(this.get('location')[1], this.get('location')[0]);
+		}
+	});
+	
 	var RouteView = Backbone.View.extend({
 		template: _.template($('#route-view-template').html()),
 		
@@ -249,6 +255,7 @@ $(function(){
 		
 		initialize: function() {
 			this.buses = new Backbone.Collection;
+			this.buses.model = Bus;
 			this.buses.on('reset', this.addBuses, this);
 			
 			if(this.options.route) {
@@ -261,13 +268,15 @@ $(function(){
 		},
 		
 		render: function() {
-			this.$el.html(this.template({ routes: this.collection.toJSON(), buses: this.buses.length }));
+			this.$el.html(this.template({ routes: this.collection.toJSON(), buses: this.busViews.length }));
 			this.selectedRoute && this.$('#route').val(this.selectedRoute);
 			this.$el.trigger('create');
 			return this;
 		},
 		
 		addBus: function(bus) {
+			if(App.BusParkView.contains(bus)) return;
+			
 			var busView = new BusView({model: bus});
 			busView.on('markerSelected', this.showBusDetails, this);
 			this.bounds.extend(busView.position);
@@ -354,9 +363,7 @@ $(function(){
 			var geometry = google.maps.geometry;
 
 			for (var i = 0; i < this.polygons.length; i += 1) {
-				if (geometry.poly.containsLocation(bus.position,
-					this.polygons[i])) {
-
+				if (geometry.poly.containsLocation(bus.position(), this.polygons[i])) {
 					return true;
 				}
 			}
@@ -376,16 +383,12 @@ $(function(){
 	var BusView = Backbone.View.extend({
 		initialize: function() {
 			_.bindAll(this);
+			this.position = this.model.position();
 			this.collection = new Backbone.Collection;
 			this.collection.url = '/api/buses/history/' + this.model.get('busId');
 			this.collection.on('reset', this.createPath, this);
 			this.collection.fetch();
-			this.position = new google.maps.LatLng(this.model.get('location')[1], this.model.get('location')[0]);
-
-			// don't display marker if in the bus park
-			if (!busParkView.contains(this)) {
-				this.createMarker();
-			}
+			this.createMarker();
 		},
 		
 		createMarker: function () {
@@ -659,11 +662,10 @@ $(function(){
 			App.ContentView.setSubView(new NextBusView({ collection: stopTimes, stop: stop, route: route }));
 		}
 	});
-
-	var busParkView = new BusParkView();
-
+	
 	var App = {
 		MapView: new MapView,
+		BusParkView: new BusParkView,
 		ContentView: new ContentView,
 		Router: new Router
 	};
